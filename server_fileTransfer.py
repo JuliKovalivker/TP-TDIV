@@ -3,13 +3,24 @@ import sys
 import os
 from urllib.parse import parse_qs, urlparse
 import qrcode
+from PIL import Image
 
 
 #FUNCIONES AUXILIARES
 
 def imprimir_qr_en_terminal(url):
     """Dada una URL la imprime por terminal como un QR"""
-    #COMPLETAR usando la librería qrcode
+
+    qr = qrcode.QRCode(
+    version=1,
+    box_size=2,
+    border=1
+    )
+
+    qr.add_data(url)
+    qr.make(fit=True)
+    qr.print_ascii(invert=True)
+
     pass
 
 def get_wifi_ip():
@@ -105,6 +116,28 @@ def generar_html_interfaz(modo):
 
 
 #CODIGO A COMPLETAR
+#### FILTRAR POR GET !!!!!!!!! Cerrar conexion !!!!!!!!!!!!!!!!!!
+def service_connection(key, mask):
+    sock = key.fileobj
+    data = key.data
+
+    try:
+        if mask & selectors.EVENT_READ:
+            recv_data = sock.recv(5000)
+            if recv_data:
+                request = recv_data.decode("utf-8", errors="ignore")
+                print(f"Solicitud de {data.addr}:\n{request}")
+                html = generar_html_interfaz("download").encode("utf-8")
+                response = (
+                        "HTTP/1.1 200 OK\r\n"
+                        "Content-Type: text/html; charset=utf-8\r\n"
+                        f"Content-Length: {len(html)}\r\n"
+                        "Connection: close\r\n"
+                        "\r\n"
+                ).encode() + html
+                sock.send(response)
+    except:
+        pass
 
 def manejar_descarga(archivo, request_line):
     """
@@ -124,6 +157,21 @@ def manejar_carga(body, boundary, directorio_destino="."):
     return b""
 
 
+import selectors
+import types
+sel = selectors.DefaultSelector()
+
+
+def accept_wrapper(sock):
+    conn, addr = sock.accept()
+    print(f"Accepted connection from {addr}")
+    conn.setblocking(False)
+    data = types.SimpleNamespace(addr=addr, inb=b"", outb=b"")
+    events = selectors.EVENT_READ | selectors.EVENT_WRITE
+    sel.register(conn, events, data=data)
+    
+
+
 def start_server(archivo_descarga=None, modo_upload=False):
     """
     Inicia el servidor TCP.
@@ -132,17 +180,28 @@ def start_server(archivo_descarga=None, modo_upload=False):
     """
 
     # 1. Obtener IP local y poner al servidor a escuchar en un puerto aleatorio
-    #COMPLETAR
 
-    ip_server = ""
-    puerto = ""
 
-    server_socket = ""
+    ip_server = get_wifi_ip()
+    puerto = 5000 #no aleatorio
+
+
+    server_socket = socket(AF_INET, SOCK_STREAM)
+    server_socket.bind((ip_server, puerto))
+    server_socket.listen()
+    server_socket.setblocking(False)
+    sel.register(server_socket, selectors.EVENT_READ, data=None)
 
     # 2. Mostrar información del servidor y el código QR
     # COMPLETAR: imprimir URL y modo de operación (download/upload)
 
+    #mostrar informacion?
+    url = "http://" + ip_server + ":" + str(puerto)
+    print(url)
+    imprimir_qr_en_terminal(url)
+
     # 3. Esperar conexiones y atender un cliente
+    
     # COMPLETAR:
     # - aceptar la conexión (accept)
     # - recibir los datos (recv)
@@ -152,7 +211,16 @@ def start_server(archivo_descarga=None, modo_upload=False):
     # - enviar la respuesta al cliente
     # - cerrar la conexión
 
-    pass  # Eliminar cuando esté implementado
+    while True:
+        events = sel.select(timeout=None)
+        for key, mask in events:
+            if key.data is None:
+                accept_wrapper(key.fileobj) #Acepto la conexion
+            else:
+                service_connection(key, mask) #Recibo los datos, determino metodo, genero respuesta, envio respuesta, cierro conexion
+
+
+    #pass  # Eliminar cuando esté implementado
 
 
 if __name__ == "__main__":

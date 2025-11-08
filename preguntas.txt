@@ -1,0 +1,4 @@
+1. tuve que importar las librerias selectors y types, es ilegal que las haya usado?
+2. estuve siguiendo de forma muy literal el tutorial de https://realpython.com/python-sockets/, esta mal? hace cosas que no entiendo al
+   100% pero vienen funcionando
+3. el puerto lo tengo que generar de forma aleatorio literalmente?
