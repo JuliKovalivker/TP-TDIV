@@ -114,30 +114,55 @@ def generar_html_interfaz(modo):
 """
 
 
-
 #CODIGO A COMPLETAR
 #### FILTRAR POR GET !!!!!!!!! Cerrar conexion !!!!!!!!!!!!!!!!!!
-def service_connection(key, mask):
+def service_connection(key, mask, modo):
     sock = key.fileobj
     data = key.data
-
     try:
         if mask & selectors.EVENT_READ:
             recv_data = sock.recv(5000)
             if recv_data:
                 request = recv_data.decode("utf-8", errors="ignore")
-                print(f"Solicitud de {data.addr}:\n{request}")
-                html = generar_html_interfaz("download").encode("utf-8")
-                response = (
-                        "HTTP/1.1 200 OK\r\n"
-                        "Content-Type: text/html; charset=utf-8\r\n"
-                        f"Content-Length: {len(html)}\r\n"
+                print(f"Solicitud de {data.addr}:\n{request}") #borrar
+                if(not modo):
+                    html = generar_html_interfaz("download").encode("utf-8")
+                    response = (
+                            "HTTP/1.1 200 OK\r\n"
+                            "Content-Type: text/html; charset=utf-8\r\n"
+                            f"Content-Length: {len(html)}\r\n"
+                            "Connection: close\r\n"
+                            "\r\n"
+                    ).encode() + html
+                    sock.send(response)
+                elif(modo):
+                    html = generar_html_interfaz("upload").encode("utf-8")
+                    response = (
+                            "HTTP/1.1 200 OK\r\n"
+                            "Content-Type: text/html; charset=utf-8\r\n"
+                            f"Content-Length: {len(html)}\r\n"
+                            "Connection: close\r\n"
+                            "\r\n"
+                    ).encode() + html
+                    sock.send(response)
+                else:
+                    response = (
+                        "HTTP/1.1 404 Not Found\r\n"
+                        "Content-Type: text/plain\r\n"
                         "Connection: close\r\n"
                         "\r\n"
-                ).encode() + html
-                sock.send(response)
-    except:
-        pass
+                        "Ruta no encontrada"
+                    ).encode()
+                    sock.send(response)
+                sel.unregister(sock)
+                sock.close()
+    except ConnectionResetError: ###### todo el except no entiendo nada
+        print(f"⚠️ Cliente {data.addr} cerró la conexión abruptamente.")
+        try:
+            sel.unregister(sock)
+        except Exception:
+            pass
+        sock.close()
 
 def manejar_descarga(archivo, request_line):
     """
@@ -154,6 +179,17 @@ def manejar_carga(body, boundary, directorio_destino="."):
     Procesa un POST con multipart/form-data, guarda el archivo y devuelve una página de confirmación.
     """
     # COMPLETAR
+
+    # filename, file_content = parsear_multipart(body, boundary)
+    # if filename and file_content:
+    #     # Guardar archivo subido
+    #     ruta = os.path.join(directorio_destino, filename)
+    #     with open(ruta, "wb") as f:
+    #         f.write(file_content)
+
+    #     print(f"Archivo recibido: {filename} ({len(file_content)} bytes)")
+
+
     return b""
 
 
@@ -217,7 +253,7 @@ def start_server(archivo_descarga=None, modo_upload=False):
             if key.data is None:
                 accept_wrapper(key.fileobj) #Acepto la conexion
             else:
-                service_connection(key, mask) #Recibo los datos, determino metodo, genero respuesta, envio respuesta, cierro conexion
+                service_connection(key, mask, modo_upload) #Recibo los datos, determino metodo, genero respuesta, envio respuesta, cierro conexion
 
 
     #pass  # Eliminar cuando esté implementado
