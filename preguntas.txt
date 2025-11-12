@@ -3,3 +3,5 @@
    100% pero vienen funcionando
 3. el puerto lo tengo que generar de forma aleatorio literalmente?
 4. que es mime?
+5. los excepts con textito azul, que onda?
+6. entiendo poco y nada se como agarre rcv_data, esta muy mal?
