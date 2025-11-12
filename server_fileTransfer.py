@@ -182,7 +182,7 @@ def service_connection(key, mask, modo, archivo_descarga=None):
                         except IndexError:
                             pass
                 if boundary:
-                    html = manejar_carga(body, boundary, directorio_destino="archivos_cargados") # Ya puedo cargar el archivo
+                    html = manejar_carga(body, boundary, directorio_destino="archivos_servidor") # Ya puedo cargar el archivo
                 else:
                     html = b"<html><body><h1>Error: boundary no encontrado o Content-Type incorrecto.</h1></body></html>"
                 response = (
@@ -218,7 +218,35 @@ def manejar_descarga(archivo, request_line):
     Debe incluir los headers: Content-Type, Content-Length y Content-Disposition.
     """
     # COMPLETAR
-    return b""
+    import mimetypes
+    import gzip
+    import io
+    import os
+
+    mime_type, _ = mimetypes.guess_type(archivo)
+    if mime_type is None:
+        mime_type = "application/octet-stream"
+
+    with open(archivo, "rb") as f:
+        original = f.read()
+
+    buffer = io.BytesIO()
+    with gzip.GzipFile(fileobj=buffer, mode="wb") as gz:
+        gz.write(original)
+    comprimido = buffer.getvalue()
+
+    headers = (
+        "HTTP/1.1 200 OK\r\n"
+        f"Content-Type: {mime_type}\r\n"
+        f"Content-Encoding: gzip\r\n"
+        f"Content-Length: {len(comprimido)}\r\n"
+        f"Content-Disposition: attachment; filename=\"{os.path.basename(archivo)}.gz\"\r\n"
+        "Connection: close\r\n"
+        "\r\n"
+    )
+
+    # return json.dumps(data)
+    return headers.encode("utf-8") + comprimido
 
 
 def manejar_carga(body, boundary, directorio_destino="."):
@@ -320,7 +348,7 @@ def start_server(archivo_descarga=None, modo_upload=False):
             if key.data is None:
                 accept_wrapper(key.fileobj) #Acepto la conexion
             else:
-                service_connection(key, mask, modo_upload) #Recibo los datos, genero respuesta, envio respuesta, cierro conexion
+                service_connection(key, mask, modo_upload, archivo_descarga) #Recibo los datos, genero respuesta, envio respuesta, cierro conexion
 
     #pass  # Eliminar cuando esté implementado
 
