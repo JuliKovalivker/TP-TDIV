@@ -163,6 +163,13 @@ def generate_response(status, html=None, from_descarga=False, mime_type=None, co
                     "Connection: close\r\n"
                     "\r\n"
                 )
+    elif status == 500:
+        return (    "HTTP/1.1 500 Internal Server Error\r\n"
+                    "Content-Type: text/plain\r\n"
+                    "Connection: close\r\n"
+                    "\r\n"
+                ).encode() + html
+
 
 def service_connection(key, mask, modo, archivo_descarga=None):
     sock = key.fileobj
@@ -177,7 +184,7 @@ def service_connection(key, mask, modo, archivo_descarga=None):
                 return
             data.inb += recv_data
             header_end = data.inb.find(b"\r\n\r\n")
-            if header_end == -1:
+            if header_end == -1: # esto no entiendo
                 return
             headers_raw = data.inb[:header_end]
             headers = headers_raw.decode("utf-8", errors="ignore")  # Decodifico el header
@@ -273,13 +280,13 @@ def manejar_carga(body, boundary, directorio_destino="."):
             print(f"Archivo recibido: {filename} ({len(file_content)} bytes) guardado en {ruta}")
             html_content = generar_html_aux(filename, file_content)
             return html_content.encode("utf-8")
-        except: ################ PONER ERROR 500 INTERNAL SERVER ERROR
+        except:
             print("Error al guardar el archivo")
             error_html = "<html><body><h1>Error al guardar el archivo</h1><p><a href='/'>Volver</a></p></body></html>"
-            return error_html.encode("utf-8")
-    else:  ################ PONER ERROR 500 INTERNAL SERVER ERROR
+            return generate_response(500, error_html)
+    else:
         error_html = "<html><body><h1>Error: No se encontró el archivo o contenido en la solicitud. Asegúrate de haber seleccionado un archivo.</h1><p><a href='/'>Volver</a></p></body></html>"
-        return error_html.encode("utf-8")
+        return generate_response(500, error_html)
 
 import selectors
 import types
@@ -313,7 +320,6 @@ def start_server(archivo_descarga=None, modo_upload=False):
     # 2. Mostrar información del servidor y el código QR
     # COMPLETAR: imprimir URL y modo de operación (download/upload)
 
-    #mostrar informacion?
     url = "http://" + ip_server + ":" + str(puerto)
     print(url)
     imprimir_qr_en_terminal(url)
@@ -333,9 +339,9 @@ def start_server(archivo_descarga=None, modo_upload=False):
         events = sel.select(timeout=None)
         for key, mask in events:
             if key.data is None:
-                accept_wrapper(key.fileobj) #Acepto la conexion
+                accept_wrapper(key.fileobj) # Acepto la conexion
             else:
-                service_connection(key, mask, modo_upload, archivo_descarga) #Recibo los datos, genero respuesta, envio respuesta, cierro conexion
+                service_connection(key, mask, modo_upload, archivo_descarga) # Recibo los datos, genero respuesta, envio respuesta, cierro conexion
 
     #pass  # Eliminar cuando esté implementado
 
