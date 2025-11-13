@@ -3,6 +3,9 @@ import sys
 import os
 from urllib.parse import parse_qs, urlparse
 import qrcode
+import mimetypes
+import gzip
+import io
 
 #FUNCIONES AUXILIARES
 
@@ -109,9 +112,57 @@ def generar_html_interfaz(modo):
 </html>
 """
 
-
 #CODIGO A COMPLETAR
 # Incluimos tambien otras funciones auxiliares implemnetadas por nosotras
+
+def generar_html_aux(filename, file_content):
+    """HTML informativo para usar luego de la carga de un archivo, permite volver al HTML original"""
+    return f"""
+            <html>
+                <head>
+                    <meta charset="utf-8">
+                    <title>Carga Exitosa</title>
+                    <style>
+                        body {{ font-family: sans-serif; max-width: 500px; margin: 50px auto; text-align: center;}}
+                        h1 {{ color: #28a745; }}
+                        a {{ display: inline-block; padding: 10px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; margin-top: 15px;}}
+                    </style>
+                </head>
+                <body>
+                    <h1>✅ Archivo Subido con Éxito</h1>
+                    <p>Nombre: <strong>{filename}</strong></p>
+                    <p>Tamaño: <strong>{len(file_content)} bytes</strong></p>
+                    <p><a href="/">Volver a subir otro archivo</a></p>
+                </body>
+            </html>
+            """
+
+def generate_response(status, html=None, from_descarga=False, mime_type=None, comprimido=None, archivo=None):
+    """Dado el status, html y otros parametros de ser necesarios genera la response necesaria"""
+    if status == 200 and not from_descarga:
+        return (    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: text/html; charset=utf-8\r\n"
+                    f"Content-Length: {len(html)}\r\n"
+                    "Connection: close\r\n"
+                    "\r\n"
+                ).encode() + html
+    elif status == 404:
+        return (    "HTTP/1.1 404 Not Found\r\n"
+                    "Content-Type: text/plain\r\n"
+                    "Connection: close\r\n"
+                    "\r\n"
+                    "Ruta no encontrada"
+                ).encode()
+    elif status == 200 and from_descarga:
+        return (
+                    "HTTP/1.1 200 OK\r\n"
+                    f"Content-Type: {mime_type}\r\n"
+                    f"Content-Encoding: gzip\r\n"
+                    f"Content-Length: {len(comprimido)}\r\n"
+                    f"Content-Disposition: attachment; filename=\"{os.path.basename(archivo)}.gz\"\r\n"
+                    "Connection: close\r\n"
+                    "\r\n"
+                )
 
 def service_connection(key, mask, modo, archivo_descarga=None):
     sock = key.fileobj
@@ -129,20 +180,11 @@ def service_connection(key, mask, modo, archivo_descarga=None):
             if header_end == -1:
                 return
             headers_raw = data.inb[:header_end]
-            try:
-                headers = headers_raw.decode("utf-8", errors="ignore")  # Decodifico el header
-            except UnicodeDecodeError:
-                print("Error al decodificar headers.")
-                sel.unregister(sock)
-                sock.close()
-                return
+            headers = headers_raw.decode("utf-8", errors="ignore")  # Decodifico el header
             content_length = 0
             for line in headers.split("\r\n"):
-                if line.lower().startswith("content-length:"):
-                    try:
-                        content_length = int(line.split(":")[1].strip())
-                    except ValueError:
-                        pass
+                if "Content-Length:" in line:
+                    content_length = int(line.split(":")[1].strip())
                     break
             expected_total_length = header_end + 4 + content_length
             if len(data.inb) < expected_total_length:
@@ -162,52 +204,28 @@ def service_connection(key, mask, modo, archivo_descarga=None):
                         html = generar_html_interfaz("upload").encode("utf-8")
                     else:
                         html = generar_html_interfaz("download").encode("utf-8")
-                    response = (
-                        "HTTP/1.1 200 OK\r\n"
-                        "Content-Type: text/html; charset=utf-8\r\n"
-                        f"Content-Length: {len(html)}\r\n"
-                        "Connection: close\r\n"
-                        "\r\n"
-                    ).encode() + html
+                    response = generate_response(200, html)
                 elif path == "/download" and not modo and archivo_descarga:
                     response = manejar_descarga(archivo_descarga, request_line)
             elif method == "POST" and modo:
                 boundary = None
                 for line in headers.split("\r\n"):
                     if "Content-Type:" in line and "multipart/form-data" in line:
-                        try:
-                            boundary_part = line.split("boundary=")[1].strip() # Limpiar espacio o caracteres no deseados del boundary
-                            boundary = boundary_part.strip('"') 
-                            break
-                        except IndexError:
-                            pass
-                if boundary:
-                    html = manejar_carga(body, boundary, directorio_destino="archivos_servidor") # Ya puedo cargar el archivo
-                else:
-                    html = b"<html><body><h1>Error: boundary no encontrado o Content-Type incorrecto.</h1></body></html>"
-                response = (
-                    "HTTP/1.1 200 OK\r\n"
-                    "Content-Type: text/html; charset=utf-8\r\n"
-                    f"Content-Length: {len(html)}\r\n"
-                    "Connection: close\r\n"
-                    "\r\n"
-                ).encode() + html
+                        boundary_part = line.split("boundary=")[1].strip() # Limpiar espacio o caracteres no deseados del boundary
+                        boundary = boundary_part.strip('"') 
+                        break
+                html = manejar_carga(body, boundary, directorio_destino="archivos_servidor") # Ya puedo cargar el archivo
+                response = generate_response(200, html)
             if response is None:
-                response = (
-                    "HTTP/1.1 404 Not Found\r\n"
-                    "Content-Type: text/plain\r\n"
-                    "Connection: close\r\n"
-                    "\r\n"
-                    "Ruta no encontrada"
-                ).encode()
+                response = generate_response(404)
             sock.sendall(response)
             sel.unregister(sock)
             sock.close()
-    except ConnectionResetError:
-        print("Se cerro la conexion.")
+    except:
+        print("Se cerró la conexión.")
         try:
             sel.unregister(sock)
-        except Exception:
+        except:
             pass
         sock.close()
 
@@ -218,10 +236,6 @@ def manejar_descarga(archivo, request_line):
     Debe incluir los headers: Content-Type, Content-Length y Content-Disposition.
     """
     # COMPLETAR
-    import mimetypes
-    import gzip
-    import io
-    import os
 
     mime_type, _ = mimetypes.guess_type(archivo)
     if mime_type is None:
@@ -235,19 +249,12 @@ def manejar_descarga(archivo, request_line):
         gz.write(original)
     comprimido = buffer.getvalue()
 
-    headers = (
-        "HTTP/1.1 200 OK\r\n"
-        f"Content-Type: {mime_type}\r\n"
-        f"Content-Encoding: gzip\r\n"
-        f"Content-Length: {len(comprimido)}\r\n"
-        f"Content-Disposition: attachment; filename=\"{os.path.basename(archivo)}.gz\"\r\n"
-        "Connection: close\r\n"
-        "\r\n"
-    )
+    headers = generate_response(200, None, True, mime_type, comprimido, archivo)
+
+    #si sale mal error 500 internal server error
 
     # return json.dumps(data)
     return headers.encode("utf-8") + comprimido
-
 
 def manejar_carga(body, boundary, directorio_destino="."):
     """
@@ -265,31 +272,13 @@ def manejar_carga(body, boundary, directorio_destino="."):
             with open(ruta, "wb") as f:  # Abrir el archivo en modo binario de escritura ('wb') y escribir el contenido
                 f.write(file_content)
             print(f"Archivo recibido: {filename} ({len(file_content)} bytes) guardado en {ruta}")
-            html_content = f"""
-            <html>
-                <head>
-                    <meta charset="utf-8">
-                    <title>Carga Exitosa</title>
-                    <style>
-                        body {{ font-family: sans-serif; max-width: 500px; margin: 50px auto; text-align: center;}}
-                        h1 {{ color: #28a745; }}
-                        a {{ display: inline-block; padding: 10px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; margin-top: 15px;}}
-                    </style>
-                </head>
-                <body>
-                    <h1>✅ Archivo Subido con Éxito</h1>
-                    <p>Nombre: <strong>{filename}</strong></p>
-                    <p>Tamaño: <strong>{len(file_content)} bytes</strong></p>
-                    <p><a href="/">Volver a subir otro archivo</a></p>
-                </body>
-            </html>
-            """
+            html_content = generar_html_aux(filename, file_content)
             return html_content.encode("utf-8")
-        except Exception as e:
-            print(f"Error al guardar el archivo: {e}")
-            error_html = f"<html><body><h1>Error al guardar el archivo: {e}</h1><p><a href='/'>Volver</a></p></body></html>"
+        except: ################ PONER ERROR 500 INTERNAL SERVER ERROR
+            print("Error al guardar el archivo")
+            error_html = "<html><body><h1>Error al guardar el archivo</h1><p><a href='/'>Volver</a></p></body></html>"
             return error_html.encode("utf-8")
-    else:
+    else:  ################ PONER ERROR 500 INTERNAL SERVER ERROR
         error_html = "<html><body><h1>Error: No se encontró el archivo o contenido en la solicitud. Asegúrate de haber seleccionado un archivo.</h1><p><a href='/'>Volver</a></p></body></html>"
         return error_html.encode("utf-8")
 
@@ -299,7 +288,7 @@ sel = selectors.DefaultSelector()
 
 def accept_wrapper(sock):
     conn, addr = sock.accept()
-    print(f"Accepted connection from {addr}")
+    print(f"Accepted connection from {addr}") # Borrar
     conn.setblocking(False)
     data = types.SimpleNamespace(addr=addr, inb=b"", outb=b"")
     events = selectors.EVENT_READ | selectors.EVENT_WRITE
@@ -315,10 +304,9 @@ def start_server(archivo_descarga=None, modo_upload=False):
     # 1. Obtener IP local y poner al servidor a escuchar en un puerto aleatorio
 
     ip_server = get_wifi_ip()
-    puerto = 5000 # no aleatorio, ponemos 0 o randint?
-
     server_socket = socket(AF_INET, SOCK_STREAM)
-    server_socket.bind((ip_server, puerto))
+    server_socket.bind((ip_server, 0))       # El SO elige un puerto libre
+    puerto = server_socket.getsockname()[1]  # Obtengo el puerto asignado
     server_socket.listen()
     server_socket.setblocking(False)
     sel.register(server_socket, selectors.EVENT_READ, data=None)
@@ -351,7 +339,6 @@ def start_server(archivo_descarga=None, modo_upload=False):
                 service_connection(key, mask, modo_upload, archivo_descarga) #Recibo los datos, genero respuesta, envio respuesta, cierro conexion
 
     #pass  # Eliminar cuando esté implementado
-
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

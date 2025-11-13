@@ -1,7 +1,6 @@
-1. tuve que importar las librerias selectors y types, es ilegal que las haya usado?
-2. estuve siguiendo de forma muy literal el tutorial de https://realpython.com/python-sockets/, esta mal? hace cosas que no entiendo al
-   100% pero vienen funcionando
-3. el puerto lo tengo que generar de forma aleatorio literalmente?
-4. que es mime?
-5. los excepts con textito azul, que onda?
-6. entiendo poco y nada se como agarre rcv_data, esta muy mal?
+1. el puerto lo tengo que generar de forma aleatorio literalmente? si, hagamos con 0 y que elija el so
+2. esta muy mal haber tenido que limpiar el boundary?
+3. porque se me manda todo roto el archivo?
+4. mato selectors?
+5. hay algun error importante que no estoy teniendo en cuenta o algo que estoy obviando que no es obvio?
+6. a que se refiere con mostrar informacion?
