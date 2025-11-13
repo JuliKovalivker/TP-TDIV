@@ -113,7 +113,7 @@ def generar_html_interfaz(modo):
 """
 
 #CODIGO A COMPLETAR
-# Incluimos tambien otras funciones auxiliares implemnetadas por nosotras
+#Incluimos tambien otras funciones auxiliares implemnetadas por nosotras
 
 def generar_html_aux(filename, file_content):
     """HTML informativo para usar luego de la carga de un archivo, permite volver al HTML original"""
@@ -211,8 +211,7 @@ def service_connection(key, mask, modo, archivo_descarga=None):
                 boundary = None
                 for line in headers.split("\r\n"):
                     if "Content-Type:" in line and "multipart/form-data" in line:
-                        boundary_part = line.split("boundary=")[1].strip() # Limpiar espacio o caracteres no deseados del boundary
-                        boundary = boundary_part.strip('"') 
+                        boundary = line.split("boundary=")[1].strip() # Limpiar espacio o caracteres no deseados del boundary
                         break
                 html = manejar_carga(body, boundary, directorio_destino="archivos_servidor") # Ya puedo cargar el archivo
                 response = generate_response(200, html)
@@ -251,7 +250,7 @@ def manejar_descarga(archivo, request_line):
 
     headers = generate_response(200, None, True, mime_type, comprimido, archivo)
 
-    #si sale mal error 500 internal server error
+    #si sale mal error 404 not found
 
     # return json.dumps(data)
     return headers.encode("utf-8") + comprimido
