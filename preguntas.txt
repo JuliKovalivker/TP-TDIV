@@ -1,6 +1,4 @@
-1. el puerto lo tengo que generar de forma aleatorio literalmente? si, hagamos con 0 y que elija el so
-2. esta muy mal haber tenido que limpiar el boundary?
-3. porque se me manda todo roto el archivo?
-4. mato selectors?
-5. hay algun error importante que no estoy teniendo en cuenta o algo que estoy obviando que no es obvio?
-6. a que se refiere con mostrar informacion?
+1. esta muy mal haber tenido que limpiar el boundary?
+2. porque se me manda todo roto el archivo?
+3. mato selectors?
+4. hay algun error importante que no estoy teniendo en cuenta o algo que estoy obviando que no es obvio?
