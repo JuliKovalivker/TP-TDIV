@@ -243,24 +243,42 @@ def manejar_descarga(archivo, request_line):
     """
     # COMPLETAR
 
-    mime_type, _ = mimetypes.guess_type(archivo)
-    if mime_type is None:
-        mime_type = "application/octet-stream"
+    try:
+        mime_type, _ = mimetypes.guess_type(archivo)
+        if mime_type is None:
+            mime_type = "application/octet-stream"
 
-    with open(archivo, "rb") as f:
-        original = f.read()
+        with open(archivo, "rb") as f:
+            original = f.read()
 
-    buffer = io.BytesIO()
-    with gzip.GzipFile(fileobj=buffer, mode="wb") as gz:
-        gz.write(original)
-    comprimido = buffer.getvalue()
+        buffer = io.BytesIO()
+        with gzip.GzipFile(fileobj=buffer, mode="wb") as gz:
+            gz.write(original)
+        comprimido = buffer.getvalue()
 
-    headers = generate_response(200, None, True, mime_type, comprimido, archivo)
+        headers = generate_response(200, None, True, mime_type, comprimido, archivo)
+
+        # Comparación de tamaños
+        size_original = len(original)
+        size_comprimido = len(comprimido)
+
+        print(f"Tamaño original: {size_original} bytes")
+        print(f"Tamaño comprimido: {size_comprimido} bytes")
+        print(f"Compresión: {100 * size_comprimido / size_original:.2f}% del tamaño original")
+
+        ratio = size_original / size_comprimido
+        print(f"Ratio de compresión: {ratio:.3f}")
+
+        reduccion = (1 - ratio) * 100
+        print(f"Ratio de compresión en %: {reduccion:.2f}%")
+
+        return headers.encode("utf-8") + comprimido
+    except:
+        return generate_response(404)
 
     #si sale mal error 404 not found
 
     # return json.dumps(data)
-    return headers.encode("utf-8") + comprimido
 
 def manejar_carga(body, boundary, directorio_destino="."):
     """

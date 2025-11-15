@@ -1,4 +1,4 @@
 1. esta muy mal haber tenido que limpiar el boundary?
 2. porque se me manda todo roto el archivo?
-3. mato selectors?
+3. mato selectors? SI
 4. hay algun error importante que no estoy teniendo en cuenta o algo que estoy obviando que no es obvio?
