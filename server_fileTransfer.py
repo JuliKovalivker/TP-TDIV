@@ -6,6 +6,8 @@ import qrcode
 import mimetypes
 import gzip
 import io
+import file_stats
+from timeit import default_timer as timer
 
 #FUNCIONES AUXILIARES
 
@@ -137,7 +139,7 @@ def generar_html_aux(filename, file_content):
             </html>
             """
 
-def generate_response(status, html=None, from_descarga=False, mime_type=None, comprimido=None, archivo=None):
+def generate_response(status, html=None, from_descarga=False, mime_type=None, archivo_completo=None, archivo=None, zip=False):
     """Dado el status, html y otros parametros de ser necesarios genera la response necesaria"""
     if status == 200 and not from_descarga:
         return (    "HTTP/1.1 200 OK\r\n"
@@ -153,13 +155,21 @@ def generate_response(status, html=None, from_descarga=False, mime_type=None, co
                     "\r\n"
                     "Ruta no encontrada"
                 ).encode()
-    elif status == 200 and from_descarga:
+    elif status == 200 and from_descarga and zip:
         return (
                     "HTTP/1.1 200 OK\r\n"
                     f"Content-Type: {mime_type}\r\n"
-                    f"Content-Encoding: gzip\r\n"
-                    f"Content-Length: {len(comprimido)}\r\n"
+                    f"Content-Length: {len(archivo_completo)}\r\n"
                     f"Content-Disposition: attachment; filename=\"{os.path.basename(archivo)}.gz\"\r\n"
+                    "Connection: close\r\n"
+                    "\r\n"
+                )
+    elif status == 200 and from_descarga and not zip:
+        return (
+                    "HTTP/1.1 200 OK\r\n"
+                    f"Content-Type: {mime_type}\r\n"
+                    f"Content-Length: {len(archivo_completo)}\r\n"
+                    f"Content-Disposition: attachment; filename=\"{os.path.basename(archivo)}\"\r\n"
                     "Connection: close\r\n"
                     "\r\n"
                 )
@@ -170,8 +180,9 @@ def generate_response(status, html=None, from_descarga=False, mime_type=None, co
                     "\r\n"
                 ).encode() + html
 
+stats = ["", 0, 0, True, 0.0]
 
-def service_connection(key, mask, modo, archivo_descarga=None):
+def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
     sock = key.fileobj
     data = key.data
     try:
@@ -213,7 +224,17 @@ def service_connection(key, mask, modo, archivo_descarga=None):
                         html = generar_html_interfaz("download").encode("utf-8")
                     response = generate_response(200, html)
                 elif path == "/download" and not modo and archivo_descarga:
-                    response = manejar_descarga(archivo_descarga, request_line)
+                    start = timer()
+                    response = manejar_descarga(archivo_descarga, request_line, zip)
+                    end = timer()
+                    file_stats.agregar_archivo(
+                        nombre=stats[0],
+                        original=stats[1],
+                        comprimido=stats[2],
+                        esta_comprimido=stats[3],
+                        tiempo=end-start
+                    )
+
             elif method == "POST" and modo:
                 boundary = None
                 for line in headers.split("\r\n"):
@@ -235,14 +256,13 @@ def service_connection(key, mask, modo, archivo_descarga=None):
             pass
         sock.close()
 
-def manejar_descarga(archivo, request_line):
+def manejar_descarga(archivo, request_line, zip):
     """
     Genera una respuesta HTTP con el archivo solicitado. 
     Si el archivo no existe debe devolver un error.
     Debe incluir los headers: Content-Type, Content-Length y Content-Disposition.
     """
     # COMPLETAR
-
     try:
         mime_type, _ = mimetypes.guess_type(archivo)
         if mime_type is None:
@@ -251,34 +271,30 @@ def manejar_descarga(archivo, request_line):
         with open(archivo, "rb") as f:
             original = f.read()
 
-        buffer = io.BytesIO()
-        with gzip.GzipFile(fileobj=buffer, mode="wb") as gz:
-            gz.write(original)
-        comprimido = buffer.getvalue()
+        if zip:
+            buffer = io.BytesIO()
+            with gzip.GzipFile(fileobj=buffer, mode="wb") as gz:
+                gz.write(original)
+            comprimido = buffer.getvalue()
 
-        headers = generate_response(200, None, True, mime_type, comprimido, archivo)
+            headers = generate_response(200, None, True, mime_type, comprimido, archivo, zip=zip)
 
-        # Comparación de tamaños
-        size_original = len(original)
-        size_comprimido = len(comprimido)
+            stats[0] = archivo
+            stats[1] = len(original)
+            stats[2] = len(comprimido)
+            stats[3] = True
+            
+            return headers.encode("utf-8") + comprimido
+        else:
+            headers = generate_response(200, None, True, mime_type, original, archivo, zip=zip)
 
-        print(f"Tamaño original: {size_original} bytes")
-        print(f"Tamaño comprimido: {size_comprimido} bytes")
-        print(f"Compresión: {100 * size_comprimido / size_original:.2f}% del tamaño original")
-
-        ratio = size_original / size_comprimido
-        print(f"Ratio de compresión: {ratio:.3f}")
-
-        reduccion = (1 - ratio) * 100
-        print(f"Ratio de compresión en %: {reduccion:.2f}%")
-
-        return headers.encode("utf-8") + comprimido
+            stats[0] = archivo
+            stats[1] = len(original)
+            stats[2] = None
+            stats[3] = False
+            return headers.encode("utf-8") + original
     except:
         return generate_response(404)
-
-    #si sale mal error 404 not found
-
-    # return json.dumps(data)
 
 def manejar_carga(body, boundary, directorio_destino="."):
     """
@@ -318,7 +334,7 @@ def accept_wrapper(sock):
     events = selectors.EVENT_READ | selectors.EVENT_WRITE
     sel.register(conn, events, data=data)
 
-def start_server(archivo_descarga=None, modo_upload=False):
+def start_server(archivo_descarga=None, modo_upload=False, zip=False):
     """
     Inicia el servidor TCP.
     - Si se especifica archivo_descarga, se inicia en modo 'download'.
@@ -359,7 +375,7 @@ def start_server(archivo_descarga=None, modo_upload=False):
             if key.data is None:
                 accept_wrapper(key.fileobj) # Acepto la conexion
             else:
-                service_connection(key, mask, modo_upload, archivo_descarga) # Recibo los datos, genero respuesta, envio respuesta, cierro conexion
+                service_connection(key, mask, modo_upload, archivo_descarga, zip) # Recibo los datos, genero respuesta, envio respuesta, cierro conexion
 
     #pass  # Eliminar cuando esté implementado
 
@@ -371,14 +387,20 @@ if __name__ == "__main__":
         sys.exit(1)
 
     comando = sys.argv[1].lower()
+    
+    zip = False
+
+    if len(sys.argv) > 3:
+        if sys.argv[3].lower() == "gzip":
+            zip = True
 
     if comando == "upload":
-        start_server(archivo_descarga=None, modo_upload=True)
+        start_server(archivo_descarga=None, modo_upload=True, zip=zip)
 
     elif comando == "download" and len(sys.argv) > 2:
         archivo = sys.argv[2]
         ruta_archivo = os.path.join("archivos_servidor", archivo)
-        start_server(archivo_descarga=ruta_archivo, modo_upload=False)
+        start_server(archivo_descarga=ruta_archivo, modo_upload=False, zip=zip)
 
     else:
         print("Comando no reconocido o archivo faltante")

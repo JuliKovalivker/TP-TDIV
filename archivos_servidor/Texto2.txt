@@ -1,0 +1,5 @@
+Hoy pasé veinte minutos haciendo ping a un servidor que no respondía. Cambié cables, reinicié la placa de red, insulté al router y 
+hasta le pedí ayuda al pasante, que me miró como si estuviera rezando en otro idioma. Al final descubrí que estaba haciendo ping a 
+la IP equivocada: le estaba tirando ICMP a mi propia notebook. Así que básicamente pasé veinte minutos midiendo mi paciencia en 
+milisegundos. Lo peor es que cuando me di cuenta, abrí la consola, respiré profundo y escribí: ping 127.0.0.1. Para mi sorpresa: 
+respondió. Por lo menos alguien en esta oficina funciona correctamente, aunque sea yo mismo hablando solo.
