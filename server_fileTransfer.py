@@ -145,7 +145,7 @@ def generate_response(status, html=None, from_descarga=False, mime_type=None, ar
         return (    "HTTP/1.1 200 OK\r\n"
                     "Content-Type: text/html; charset=utf-8\r\n"
                     f"Content-Length: {len(html)}\r\n"
-                    "Connection: close\r\n"
+                    "Connection: keep-alive\r\n"
                     "\r\n"
                 ).encode() + html
     elif status == 404:
@@ -161,7 +161,7 @@ def generate_response(status, html=None, from_descarga=False, mime_type=None, ar
                     f"Content-Type: {mime_type}\r\n"
                     f"Content-Length: {len(archivo_completo)}\r\n"
                     f"Content-Disposition: attachment; filename=\"{os.path.basename(archivo)}.gz\"\r\n"
-                    "Connection: close\r\n"
+                    "Connection: keep-alive\r\n"
                     "\r\n"
                 )
     elif status == 200 and from_descarga and not zip:
@@ -170,7 +170,7 @@ def generate_response(status, html=None, from_descarga=False, mime_type=None, ar
                     f"Content-Type: {mime_type}\r\n"
                     f"Content-Length: {len(archivo_completo)}\r\n"
                     f"Content-Disposition: attachment; filename=\"{os.path.basename(archivo)}\"\r\n"
-                    "Connection: close\r\n"
+                    "Connection: keep-alive\r\n"
                     "\r\n"
                 )
     elif status == 500:
@@ -179,6 +179,12 @@ def generate_response(status, html=None, from_descarga=False, mime_type=None, ar
                     "Connection: close\r\n"
                     "\r\n"
                 ).encode() + html
+    elif status == 406:
+        return (    "HTTP/1.1 406 Not Acceptable\r\n"
+                    "Content-Type: text/plain\r\n"
+                    "Connection: close\r\n"
+                    "\r\n"
+                ).encode() + html # PROBAR
 
 stats = ["", 0, 0, True, 0.0]
 
@@ -195,7 +201,7 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
                 return
             data.inb += recv_data
             header_end = data.inb.find(b"\r\n\r\n")
-            if header_end == -1: # esto no entiendo
+            if header_end == -1:
                 return
             headers_raw = data.inb[:header_end]
             headers = headers_raw.decode("utf-8", errors="ignore")  # Decodifico el header
@@ -225,7 +231,7 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
                     response = generate_response(200, html)
                 elif path == "/download" and not modo and archivo_descarga:
                     start = timer()
-                    response = manejar_descarga(archivo_descarga, request_line, zip)
+                    response = manejar_descarga(archivo_descarga, request_line, zip, headers)
                     end = timer()
                     file_stats.agregar_archivo(
                         nombre=stats[0],
@@ -255,7 +261,7 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
             pass
         sock.close()
 
-def manejar_descarga(archivo, request_line, zip):
+def manejar_descarga(archivo, request_line, zip, headers):
     """
     Genera una respuesta HTTP con el archivo solicitado. 
     Si el archivo no existe debe devolver un error.
@@ -263,6 +269,15 @@ def manejar_descarga(archivo, request_line, zip):
     """
     # COMPLETAR
     try:
+        enc_header = None
+        for line in headers.split("\r\n"):
+            if line.lower().startswith("accept-encoding:"):
+                enc_header = line.split(":", 1)[1].lower()
+                break
+        acepta_gzip = enc_header is not None and "gzip" in enc_header
+        if zip and not acepta_gzip:
+            return generate_response(406, b"El cliente no acepta gzip")
+
         mime_type, _ = mimetypes.guess_type(archivo)
         if mime_type is None:
             mime_type = "application/octet-stream"
@@ -283,7 +298,7 @@ def manejar_descarga(archivo, request_line, zip):
             stats[2] = len(comprimido)
             stats[3] = True
             
-            return headers.encode("utf-8") + comprimido
+            return headers.encode("utf-8") + comprimido #borrar encondes?
         else:
             headers = generate_response(200, None, True, mime_type, original, archivo, zip=zip)
 
@@ -291,7 +306,7 @@ def manejar_descarga(archivo, request_line, zip):
             stats[1] = len(original)
             stats[2] = None
             stats[3] = False
-            return headers.encode("utf-8") + original
+            return headers.encode("utf-8") + original #borrar encodes?
     except:
         return generate_response(404)
 
