@@ -155,7 +155,6 @@ def generate_response(status, html=None, from_descarga=False, mime_type=None, ar
                     "\r\n"
                     "Ruta no encontrada"
                 ).encode()
-    #ESTO ES NUEVOOOOOOOOOOOOOOOOOOOOOOOOOOOO
     elif status == 406:
         return (    "HTTP/1.1 406 Not Acceptable\r\n"
                     "Content-Type: text/plain\r\n"
@@ -169,7 +168,7 @@ def generate_response(status, html=None, from_descarga=False, mime_type=None, ar
                     f"Content-Type: {mime_type}\r\n"
                     f"Content-Length: {len(archivo_completo)}\r\n"
                     f"Content-Disposition: attachment; filename=\"{os.path.basename(archivo)}.gz\"\r\n"
-                    "Content-Encoding: gzip\r\n" #AGREGADOOOOOOOOOOOOOOOOOOOOOOOOO
+                    "Content-Encoding: gzip\r\n" 
                     "Connection: close\r\n"
                     "\r\n"
                 )
@@ -208,14 +207,6 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
                 return
             headers_raw = data.inb[:header_end]
             headers = headers_raw.decode("utf-8", errors="ignore")  # Decodifico el header
-            #AGREGADOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO (DETECTA SI ACEPTA GZIP)
-            enc_header = None
-            for line in headers.split("\r\n"):
-                if line.lower().startswith("accept-encoding:"):
-                    enc_header = line.split(":", 1)[1].lower()
-                    break
-            acepta_gzip = enc_header is not None and "gzip" in enc_header
-            #HASTA ACAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
             content_length = 0
             for line in headers.split("\r\n"):
                 if "Content-Length:" in line:
@@ -225,13 +216,11 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
             if len(data.inb) < expected_total_length:
                 return
             request_complete = data.inb
-            
             # Separar request_line, headers y body
             request_line = headers.split("\r\n")[0]     # Primera linea del header tiene la request
             method = request_line.split(" ")[0]         # Primer dato del header => metodo
             path = request_line.split(" ")[1]           # Segundo dato del header => path
             body = request_complete[header_end + 4:]    # Segunda linea del header (luego de los dos enters) => body (no debe ser decodificado)
-
             response = None
             if method == "GET":
                 if path == "/":
@@ -242,10 +231,7 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
                     response = generate_response(200, html)
                 elif path == "/download" and not modo and archivo_descarga:
                     start = timer()
-                    if zip and not acepta_gzip:         #NUEVOOOOOOOOOOOOOOOOOOOOOOOOO
-                        response = generate_response(406, b"El cliente no acepta gzip") #NUEVOOOOOOOOOOOOOOOOOOOOOOOO
-                    else:
-                        response = manejar_descarga(archivo_descarga, request_line, zip and acepta_gzip)
+                    response = manejar_descarga(archivo_descarga, request_line, zip, headers)
                     end = timer()
                     file_stats.agregar_archivo(
                         nombre=stats[0],
@@ -275,7 +261,7 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
             pass
         sock.close()
 
-def manejar_descarga(archivo, request_line, zip):
+def manejar_descarga(archivo, request_line, zip, headers):
     """
     Genera una respuesta HTTP con el archivo solicitado. 
     Si el archivo no existe debe devolver un error.
@@ -283,6 +269,14 @@ def manejar_descarga(archivo, request_line, zip):
     """
     # COMPLETAR
     try:
+        enc_header = None
+        for line in headers.split("\r\n"):
+            if line.lower().startswith("accept-encoding:"):
+                enc_header = line.split(":", 1)[1].lower()
+                break
+        acepta_gzip = enc_header is not None and "gzip" in enc_header
+        if zip and not acepta_gzip:
+            return generate_response(406, b"El cliente no acepta gzip")
         mime_type, _ = mimetypes.guess_type(archivo)
         if mime_type is None:
             mime_type = "application/octet-stream"
