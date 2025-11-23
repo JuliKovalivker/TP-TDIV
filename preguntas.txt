@@ -1,3 +1,9 @@
 1. en chrome no se me cierra la conexion => timeout esta ok
 2. agregamos parametro a start_server, esta ok? tambien a manejar descarga
 3. PONER KUROSE LIMPIO
+4. chequear headers para gzip, si no acepta y lo corri con el parametro qu ehacemos?
+5. como probamos, para los que no saben deszipear, si funca ok?
+6. wireshark?
+7. que tabto profundizamos en funciones como manejar carga en el informe que conceptualmente son intuitivas?? porque sino 
+tengo que explicar linea por linea y a nadi le importa
+8. tenemos que explicar porque funca solo dentro de una misma red?

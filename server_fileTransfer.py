@@ -234,7 +234,6 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
                         esta_comprimido=stats[3],
                         tiempo=end-start
                     )
-
             elif method == "POST" and modo:
                 boundary = None
                 for line in headers.split("\r\n"):
@@ -242,7 +241,7 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
                         boundary = line.split("boundary=")[1].strip() # Limpiar espacio o caracteres no deseados del boundary
                         break
                 html = manejar_carga(body, boundary, directorio_destino="archivos_servidor") # Ya puedo cargar el archivo
-                response = generate_response(200, html)
+                response = generate_response(200, html) #mandar a manejar carga
             if response is None:
                 response = generate_response(404)
             sock.sendall(response)
