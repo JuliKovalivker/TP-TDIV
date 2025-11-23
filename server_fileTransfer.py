@@ -155,12 +155,21 @@ def generate_response(status, html=None, from_descarga=False, mime_type=None, ar
                     "\r\n"
                     "Ruta no encontrada"
                 ).encode()
+    #ESTO ES NUEVOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+    elif status == 406:
+        return (    "HTTP/1.1 406 Not Acceptable\r\n"
+                    "Content-Type: text/plain\r\n"
+                    "Connection: close\r\n"
+                    "\r\n"
+                    "El cliente no acepta gzip"
+                ).encode()
     elif status == 200 and from_descarga and zip:
         return (
                     "HTTP/1.1 200 OK\r\n"
                     f"Content-Type: {mime_type}\r\n"
                     f"Content-Length: {len(archivo_completo)}\r\n"
                     f"Content-Disposition: attachment; filename=\"{os.path.basename(archivo)}.gz\"\r\n"
+                    "Content-Encoding: gzip\r\n" #AGREGADOOOOOOOOOOOOOOOOOOOOOOOOO
                     "Connection: close\r\n"
                     "\r\n"
                 )
@@ -199,6 +208,14 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
                 return
             headers_raw = data.inb[:header_end]
             headers = headers_raw.decode("utf-8", errors="ignore")  # Decodifico el header
+            #AGREGADOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO (DETECTA SI ACEPTA GZIP)
+            enc_header = None
+            for line in headers.split("\r\n"):
+                if line.lower().startswith("accept-encoding:"):
+                    enc_header = line.split(":", 1)[1].lower()
+                    break
+            acepta_gzip = enc_header is not None and "gzip" in enc_header
+            #HASTA ACAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
             content_length = 0
             for line in headers.split("\r\n"):
                 if "Content-Length:" in line:
@@ -225,7 +242,10 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
                     response = generate_response(200, html)
                 elif path == "/download" and not modo and archivo_descarga:
                     start = timer()
-                    response = manejar_descarga(archivo_descarga, request_line, zip)
+                    if zip and not acepta_gzip:         #NUEVOOOOOOOOOOOOOOOOOOOOOOOOO
+                        response = generate_response(406, b"El cliente no acepta gzip") #NUEVOOOOOOOOOOOOOOOOOOOOOOOO
+                    else:
+                        response = manejar_descarga(archivo_descarga, request_line, zip and acepta_gzip)
                     end = timer()
                     file_stats.agregar_archivo(
                         nombre=stats[0],

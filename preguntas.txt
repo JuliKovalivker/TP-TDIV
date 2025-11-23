@@ -7,3 +7,4 @@
 7. que tabto profundizamos en funciones como manejar carga en el informe que conceptualmente son intuitivas?? porque sino 
 tengo que explicar linea por linea y a nadi le importa
 8. tenemos que explicar porque funca solo dentro de una misma red?
+9. aclaración: el caso en el que pide zip pero no acepta gzip va en service_connection porque el paramentro de request_line de manejar_descarga() no incluye accept-encoding así que no nos sirve para esto
