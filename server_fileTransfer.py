@@ -161,6 +161,7 @@ def generate_response(status, html=None, from_descarga=False, mime_type=None, ar
                     f"Content-Type: {mime_type}\r\n"
                     f"Content-Length: {len(archivo_completo)}\r\n"
                     f"Content-Disposition: attachment; filename=\"{os.path.basename(archivo)}.gz\"\r\n"
+                    "Content-Encoding: gzip\r\n"
                     "Connection: keep-alive\r\n"
                     "\r\n"
                 )
