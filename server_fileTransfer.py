@@ -215,6 +215,8 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
                 return
             request_complete = data.inb
             
+            start = timer()
+
             # Separar request_line, headers y body
             request_line = headers.split("\r\n")[0]     # Primera linea del header tiene la request
             method = request_line.split(" ")[0]         # Primer dato del header => metodo
@@ -230,7 +232,6 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
                         html = generar_html_interfaz("download").encode("utf-8")
                     response = generate_response(200, html)
                 elif path == "/download" and not modo and archivo_descarga:
-                    start = timer()
                     response = manejar_descarga(archivo_descarga, request_line, zip, headers)
                     end = timer()
                     file_stats.agregar_archivo(
@@ -269,7 +270,6 @@ def manejar_descarga(archivo, request_line, zip, headers):
     """
     # COMPLETAR
     try:
-        
         if zip:
             enc_header = None
             for line in headers.split("\r\n"):
