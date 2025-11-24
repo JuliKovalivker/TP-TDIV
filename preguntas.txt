@@ -9,3 +9,4 @@ tengo que explicar linea por linea y a nadi le importa
 8. tenemos que explicar porque funca solo dentro de una misma red?
 9. keep-alive?
 10. parametro request_line en manejar descarga?
+11. chequear los htmls de los errores

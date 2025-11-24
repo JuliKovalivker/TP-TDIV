@@ -269,14 +269,16 @@ def manejar_descarga(archivo, request_line, zip, headers):
     """
     # COMPLETAR
     try:
-        enc_header = None
-        for line in headers.split("\r\n"):
-            if line.lower().startswith("accept-encoding:"):
-                enc_header = line.split(":", 1)[1].lower()
-                break
-        acepta_gzip = enc_header is not None and "gzip" in enc_header
-        if zip and not acepta_gzip:
-            return generate_response(406, b"El cliente no acepta gzip")
+        
+        if zip:
+            enc_header = None
+            for line in headers.split("\r\n"):
+                if line.lower().startswith("accept-encoding:"):
+                    enc_header = line.split(":", 1)[1].lower()
+                    break
+            acepta_gzip = enc_header is not None and "gzip" in enc_header
+            if not acepta_gzip:
+                return generate_response(406, b"El cliente no acepta gzip")
 
         mime_type, _ = mimetypes.guess_type(archivo)
         if mime_type is None:
