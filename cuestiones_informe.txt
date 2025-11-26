@@ -1,0 +1,4 @@
+1. seccion bonus
+2. timeout
+3. cierro de sesion en descarga
+4. experimentacion

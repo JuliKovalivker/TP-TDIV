@@ -1,2 +1,0 @@
-1. en chrome no se me cierra la conexion => timeout esta ok, en descrga se puede cerrarbsolo y en el de subida timeout va god
-7. chequear los htmls de los errores y ponerle html a todos los errores (por ej el de ruta no encontrada es solo texto)

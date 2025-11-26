@@ -12,7 +12,8 @@ import selectors
 import types
 
 # Contraseña hardcodeada para el BONUS de autenticación
-PASSWORD_SECRETA = "utdt"
+# PASSWORD_SECRETA = "hashtagweloveemi<3"
+PASSWORD_SECRETA = "wop"
 
 # FUNCIONES AUXILIARES
 
@@ -352,14 +353,7 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
                 if auth_state.get(sock):
                     # Autenticado en esta conexión: Servir el archivo
                     response = manejar_descarga(archivo_descarga, request_line, zip, headers)
-                    end = timer()
-                    file_stats.agregar_archivo(
-                        nombre=stats[0],
-                        original=stats[1],
-                        comprimido=stats[2],
-                        esta_comprimido=stats[3],
-                        tiempo=end-start
-                    )
+                    
                 else:
                     # No autenticado: Volver a login
                     html = generar_html_login(error_msg="Sesión expirada o acceso no autorizado. Inicie sesión.")
@@ -371,6 +365,15 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
                 response = generate_response(404)
             
             sock.sendall(response)
+            if len(stats[0]) > 1:
+                end = timer()
+                file_stats.agregar_archivo(
+                            nombre=stats[0],
+                            original=stats[1],
+                            comprimido=stats[2],
+                            esta_comprimido=stats[3],
+                            tiempo=end-start
+                        )
 
             # *** CIERRE CONDICIONAL DE CONEXIÓN ***
             # Si se acaba de servir un archivo (GET /download exitoso), cerrar la conexión.
@@ -505,7 +508,11 @@ def accept_wrapper(sock):
 def start_server(archivo_descarga=None, modo_upload=False, zip=False):
     """
     Inicia el servidor TCP.
+    - Si se especifica archivo_descarga, se inicia en modo 'download'.
+    - Si modo_upload=True, se inicia en modo 'upload'.
     """
+
+    # 1. Obtener IP local y poner al servidor a escuchar en un puerto aleatorio
 
     ip_server = get_wifi_ip()
     server_socket = socket(AF_INET, SOCK_STREAM)
@@ -515,6 +522,9 @@ def start_server(archivo_descarga=None, modo_upload=False, zip=False):
     server_socket.setblocking(False)
     sel.register(server_socket, selectors.EVENT_READ, data=None)
 
+    # 2. Mostrar información del servidor y el código QR
+    # COMPLETAR: imprimir URL y modo de operación (download/upload)
+
     modo_str = "Upload" if modo_upload else "Download"
     archivo_str = f" ({archivo_descarga})" if archivo_descarga else ""
     print(f"Servidor en modo: {modo_str}{archivo_str}")
@@ -522,6 +532,17 @@ def start_server(archivo_descarga=None, modo_upload=False, zip=False):
     url = "http://" + ip_server + ":" + str(puerto)
     print(f"URL de acceso: {url}")
     imprimir_qr_en_terminal(url)
+
+    # 3. Esperar conexiones y atender un cliente
+    
+    # COMPLETAR:
+    # - aceptar la conexión (accept)
+    # - recibir los datos (recv)
+    # - decodificar la solicitud HTTP
+    # - determinar método (GET/POST) y ruta (/ o /download)
+    # - generar la respuesta correspondiente (HTML o archivo)
+    # - enviar la respuesta al cliente
+    # - cerrar la conexión
 
     while True:
         try:
