@@ -1,10 +1,2 @@
-1. en chrome no se me cierra la conexion => timeout esta ok
-2. agregamos parametro a start_server, esta ok? tambien a manejar descarga
-7. que tabto profundizamos en funciones como manejar carga en el informe que conceptualmente son intuitivas?? porque sino 
-tengo que explicar linea por linea y a nadi le importa
-8. tenemos que explicar porque funca solo dentro de una misma red?
-9. keep-alive? explicamos algo?
-10. parametro request_line en manejar descarga?
-11. chequear los htmls de los errores
-13. podriamos medir cuando nos respondan? la consigna no lo pide tho pero queda raro poner lo mucho que aumenta el tiempo
-14. que ponemos de payload?
+1. en chrome no se me cierra la conexion => timeout esta ok, en descrga se puede cerrarbsolo y en el de subida timeout va god
+7. chequear los htmls de los errores y ponerle html a todos los errores (por ej el de ruta no encontrada es solo texto)

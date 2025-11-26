@@ -149,12 +149,13 @@ def generate_response(status, html=None, from_descarga=False, mime_type=None, ar
                     "\r\n"
                 ).encode() + html
     elif status == 404:
+        html = b"<html><body><h1>Error 404: Ruta no encontrada</h1></body></html>"
         return (    "HTTP/1.1 404 Not Found\r\n"
-                    "Content-Type: text/plain\r\n"
+                    "Content-Type: text/html; charset=utf-8\r\n"
+                    f"Content-Length: {len(html)}\r\n"
                     "Connection: close\r\n"
                     "\r\n"
-                    "Ruta no encontrada"
-                ).encode()
+                ).encode() + html
     elif status == 200 and from_descarga and zip:
         return (
                     "HTTP/1.1 200 OK\r\n"
@@ -175,30 +176,55 @@ def generate_response(status, html=None, from_descarga=False, mime_type=None, ar
                     "\r\n"
                 )
     elif status == 500:
+        html = b"<html><body><h1>Error interno del servidor</h1></body></html>"
         return (    "HTTP/1.1 500 Internal Server Error\r\n"
-                    "Content-Type: text/plain\r\n"
+                    "Content-Type: text/html; charset=utf-8\r\n"
+                    f"Content-Length: {len(html)}\r\n"
                     "Connection: close\r\n"
                     "\r\n"
                 ).encode() + html
     elif status == 406:
+        html = b"<html><body><h1>Error 406: El cliente no acepta gzip</h1></body></html>"
         return (    "HTTP/1.1 406 Not Acceptable\r\n"
-                    "Content-Type: text/plain\r\n"
+                    "Content-Type: text/html; charset=utf-8\r\n"
+                    f"Content-Length: {len(html)}\r\n"
                     "Connection: close\r\n"
                     "\r\n"
-                ).encode() + html # PROBAR
+                ).encode() + html
 
 stats = ["", 0, 0, True, 0.0]
+
+# *** AGREGADO: tabla de timeouts por socket ***
+timeout_map = {}
 
 def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
     sock = key.fileobj
     data = key.data
+
+    # *** CERRAR CONEXION SI PASARON 300s (modo upload) ***
+    if modo:  # Solo en modo upload
+        if timer() - timeout_map.get(sock, timer()) > 30:
+            print("Timeout: cerrando conexión por inactividad")
+            try:
+                sel.unregister(sock)
+            except:
+                pass
+            sock.close()
+            timeout_map.pop(sock, None)
+            return
+
+
     try:
         if mask & selectors.EVENT_READ:
             # Si hay datos recibidos los voy guardando
             recv_data = sock.recv(4096)
+            # *** ACTUALIZAR ACTVIDAD PARA TIMEOUT ***
+            timeout_map[sock] = timer()
+
             if not recv_data:
                 sel.unregister(sock)
                 sock.close()
+                timeout_map.pop(sock, None)
                 return
             data.inb += recv_data
             header_end = data.inb.find(b"\r\n\r\n")
@@ -253,15 +279,39 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
             if response is None:
                 response = generate_response(404)
             sock.sendall(response)
-            sel.unregister(sock)
-            sock.close()
-    except:
-        print("Se cerró la conexión.")
+
+            # *** COMPORTAMIENTO PERSISTENTE / CIERRE CONDICIONAL ***
+            # - Si es una descarga (GET /download) cerramos la conexión inmediatamente.
+            # - En cualquier otro caso (POST upload, GET /) NO cerramos: mantenemos la conexión.
+            if method == "GET" and path == "/download":
+                try:
+                    sel.unregister(sock)
+                except:
+                    pass
+                sock.close()
+                timeout_map.pop(sock, None)
+                return
+
+            # Para requests normales (ej: POST upload o GET "/") limpiamos el buffer
+            # para permitir nuevas requests en la misma conexión.
+            try:
+                data.inb = b""
+            except Exception:
+                # Si por alguna razón data no es modificable, lo ignoramos.
+                pass
+
+    except Exception as e:
         try:
             sel.unregister(sock)
-        except:
+        except Exception:
             pass
-        sock.close()
+        try:
+            sock.close()
+            timeout_map.pop(sock, None)
+
+        except Exception:
+            pass
+
 
 def manejar_descarga(archivo, request_line, zip, headers):
     """
@@ -347,9 +397,16 @@ def accept_wrapper(sock):
     conn, addr = sock.accept()
     print(f"Accepted connection from {addr}") # Borrar
     conn.setblocking(False)
+
     data = types.SimpleNamespace(addr=addr, inb=b"", outb=b"")
+
+    # *** REGISTRAR HORA DE ÚLTIMA ACTIVIDAD ***
+    timeout_map[conn] = timer()
+
+
     events = selectors.EVENT_READ | selectors.EVENT_WRITE
     sel.register(conn, events, data=data)
+
 
 def start_server(archivo_descarga=None, modo_upload=False, zip=False):
     """
