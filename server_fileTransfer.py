@@ -11,9 +11,15 @@ from timeit import default_timer as timer
 import selectors
 import types
 
-# Contraseña hardcodeada para el BONUS de autenticación
-# PASSWORD_SECRETA = "hashtagweloveemi<3"
+# VARIABLES GLOBALES
+#####################
+# stats = ["", 0, 0, True, 0.0]            # Lista utilizada en la experimentacion
+timeout_map = {}                           # Diccionario socket: timer
+auth_state = {}                            # Diccionario conexion: autenticado
+# PASSWORD_SECRETA = "hashtagweloveemi<3"  # Contraseña hardcodeada para el bonus de autenticacion
 PASSWORD_SECRETA = "wop"
+sel = selectors.DefaultSelector()
+#####################
 
 # FUNCIONES AUXILIARES
 
@@ -120,10 +126,10 @@ def generar_html_interfaz(modo):
 </html>
 """
 
-#CODIGO A COMPLETAR
+# CODIGO A COMPLETAR
 
 def generar_html_login(error_msg=None):
-    """Genera el HTML del formulario de inicio de sesión con mensaje de error opcional."""
+    """Genera el HTML de la interfaz de autenticacion (bonus)."""
     error_display = f'<p class="error">{error_msg}</p>' if error_msg else ''
     return f"""
 <html>
@@ -151,7 +157,7 @@ def generar_html_login(error_msg=None):
 """
 
 def generar_html_aux(filename, file_content):
-    """HTML informativo para usar luego de la carga de un archivo, permite volver al HTML original"""
+    """HTML informativo para usar luego de la carga de un archivo, permite volver al la interfaz original."""
     return f"""
             <html>
                 <head>
@@ -173,14 +179,13 @@ def generar_html_aux(filename, file_content):
             """
 
 def generate_response(status, html=None, from_descarga=False, mime_type=None, archivo_completo=None, archivo=None, zip=False):
-    """Dado el status, html y otros parametros de ser necesarios genera la response necesaria"""
-    # Manejo de HTML normal (200, 404, 500, 406)
+    """Generador de respuestas HTTP dado el status y otros parametros de ser necesarios."""
     if not from_descarga:
         if status == 200:
             return (    "HTTP/1.1 200 OK\r\n"
                         "Content-Type: text/html; charset=utf-8\r\n"
                         f"Content-Length: {len(html.encode('utf-8'))}\r\n"
-                        "Connection: keep-alive\r\n" # MANTENER CONEXIÓN ABIERTA
+                        "Connection: keep-alive\r\n"
                         "\r\n"
                     ).encode() + html.encode("utf-8")
         elif status == 404:
@@ -207,10 +212,7 @@ def generate_response(status, html=None, from_descarga=False, mime_type=None, ar
                         "Connection: close\r\n"
                         "\r\n"
                     ).encode() + html_bytes
-
-    # Manejo de Descarga (from_descarga = True)
     else:
-        # Aquí se sirve el archivo, la conexión se cierra.
         if status == 200 and zip:
             return (
                         "HTTP/1.1 200 OK\r\n"
@@ -218,7 +220,7 @@ def generate_response(status, html=None, from_descarga=False, mime_type=None, ar
                         f"Content-Length: {len(archivo_completo)}\r\n"
                         f"Content-Disposition: attachment; filename=\"{os.path.basename(archivo)}.gz\"\r\n"
                         "Content-Encoding: gzip\r\n"
-                        "Connection: close\r\n" # Cierre de conexión después de servir el archivo
+                        "Connection: close\r\n" # Cierre de conexión después del envio del archivo
                         "\r\n"
                     ).encode() + archivo_completo
         elif status == 200 and not zip:
@@ -227,7 +229,7 @@ def generate_response(status, html=None, from_descarga=False, mime_type=None, ar
                         f"Content-Type: {mime_type}\r\n"
                         f"Content-Length: {len(archivo_completo)}\r\n"
                         f"Content-Disposition: attachment; filename=\"{os.path.basename(archivo)}\"\r\n"
-                        "Connection: close\r\n" # Cierre de conexión después de servir el archivo
+                        "Connection: close\r\n" # Cierre de conexión después del envio del archivo
                         "\r\n"
                     ).encode() + archivo_completo
         elif status == 404:
@@ -239,17 +241,13 @@ def generate_response(status, html=None, from_descarga=False, mime_type=None, ar
                         "\r\n"
                     ).encode() + html_bytes
 
-stats = ["", 0, 0, True, 0.0]
-
-timeout_map = {}
-auth_state = {}
-
-
 def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
+    """Funcion auxiliar para manejar los diferentes aspectos de la conexion."""
+
     sock = key.fileobj
     data = key.data
 
-    # CERRAR CONEXION SI PASARON 300s (solo en modo upload, si no la descarga no funciona)
+    ### Timeout de 5 minutos ###
     if modo and timer() - timeout_map.get(sock, timer()) > 300:
         print("Timeout: cerrando conexión por inactividad")
         try:
@@ -262,20 +260,24 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
         return
 
     try:
-        if mask & selectors.EVENT_READ:
-            recv_data = sock.recv(4096)
+        if mask & selectors.EVENT_READ:         # Si selectors indica que hay algo para leer desde el socket
+            recv_data = sock.recv(4096)         # Recibo los datos
             timeout_map[sock] = timer()
 
+            # Si recv_data está vacío (pero se detecto un evento de lectura) => el cliente cerró la conexión.
             if not recv_data:
                 sel.unregister(sock)
                 sock.close()
                 timeout_map.pop(sock, None)
                 auth_state.pop(sock, None)
                 return
-            data.inb += recv_data
+            
+            data.inb += recv_data               # Guardo la data en un buffer
             header_end = data.inb.find(b"\r\n\r\n")
             if header_end == -1:
+                # El header no esta completo           
                 return
+            
             headers_raw = data.inb[:header_end]
             headers = headers_raw.decode("utf-8", errors="ignore")
             content_length = 0
@@ -287,13 +289,13 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
                     except:
                         content_length = 0
                         break
-            
             expected_total_length = header_end + 4 + content_length
             if len(data.inb) < expected_total_length:
+                # El paquete no esta completo 
                 return
-            request_complete = data.inb
+            request_complete = data.inb         # Guardo el paquete completo
             
-            start = timer()
+            # start = timer() 
 
             request_line = headers.split("\r\n")[0]
             method = request_line.split(" ")[0]
@@ -303,16 +305,15 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
             response = None
             modo_str = "upload" if modo else "download"
 
-            # --- Manejo del GET inicial / Home ---
+            #### GET / ### 
             if method == "GET" and path == "/":
-                if auth_state.get(sock): # Autenticado (aplica a upload y download)
+                if auth_state.get(sock):        # Socket autenticado
                     html = generar_html_interfaz(modo_str)
-                else: # No autenticado
+                else:                           # Socket no autenticado
                     html = generar_html_login()
-                
                 response = generate_response(200, html)
             
-            # --- Manejo del POST ---
+            ### POST ###
             elif method == "POST":
                 content_type = ""
                 for line in headers.split("\r\n"):
@@ -320,28 +321,25 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
                         content_type = line.split(":", 1)[1].strip()
                         break
 
-                # 1. Manejar el POST de LOGIN (application/x-www-form-urlencoded)
+                #### POST del formulario común (de autenticacion) ###
                 if "application/x-www-form-urlencoded" in content_type:
                     try:
                         form_data = parse_qs(body.decode("utf-8"))
                         password_recibida = form_data.get('password', [''])[0]
                     except Exception:
                         password_recibida = ""
-
                     if password_recibida == PASSWORD_SECRETA:
-                        # Contraseña correcta: Marcar como autenticado y mostrar la interfaz
+                        # Contraseña correcta: marcar como autenticado y mostrar la interfaz
                         auth_state[sock] = True
                         html = generar_html_interfaz(modo_str)
                         response = generate_response(200, html)
-                        # NOTA: La conexión se mantiene abierta (keep-alive) por generate_response.
                     else:
-                        # Contraseña incorrecta: Volver a mostrar el formulario con error
+                        # Contraseña incorrecta: volver a mostrar el formulario con error
                         html = generar_html_login(error_msg="Contraseña incorrecta")
                         response = generate_response(200, html)
                 
-                # 2. Manejar el POST de CARGA de archivo (multipart/form-data)
+                # POST del formulario de subida de archivos
                 elif "multipart/form-data" in content_type and modo and auth_state.get(sock):
-                    # Solo permitir carga si estamos en modo upload Y autenticado
                     boundary = None
                     for line in headers.split("\r\n"):
                         if "Content-Type:" in line and "boundary=" in line:
@@ -349,45 +347,29 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
                             break
                     html = manejar_carga(body, boundary, directorio_destino="archivos_servidor")
                     response = generate_response(200, html)
-                
                 else:
                     response = generate_response(404)
 
-            # --- Manejo del GET /download ---
+            ### GET /download ###
             elif method == "GET" and path == "/download" and not modo and archivo_descarga:
                 if auth_state.get(sock):
-                    # Autenticado en esta conexión: Servir el archivo
                     response = manejar_descarga(archivo_descarga, request_line, zip, headers)
-                    
                 else:
-                    # No autenticado: Volver a login
                     html = generar_html_login(error_msg="Sesión expirada o acceso no autorizado. Inicie sesión.")
                     response = generate_response(200, html)
 
-            
-            # --- Petición no manejada ---
+            ### Request sin solucion ###
             if response is None:
                 response = generate_response(404)
             
             sock.sendall(response)
-            if len(stats[0]) > 1:
-                end = timer()
-                # file_stats.agregar_archivo(
-                #             nombre=stats[0],
-                #             original=stats[1],
-                #             comprimido=stats[2],
-                #             esta_comprimido=stats[3],
-                #             tiempo=end-start
-                #         )
 
-            # *** CIERRE CONDICIONAL DE CONEXIÓN ***
-            # Si se acaba de servir un archivo (GET /download exitoso), cerrar la conexión.
-            should_close = False
+            # if len(stats[0]) > 1:
+            #     end = timer()
+            #     file_stats.agregar_archivo( nombre=stats[0], comprimido=stats[2], esta_comprimido=stats[3], tiempo=end-start)
+
+            ### Cierre de conexion luego de la descarga del archivo (modo Download) ####
             if method == "GET" and path == "/download" and not modo and auth_state.get(sock):
-                 # Si llegamos aquí y el estado estaba bien, se sirvió el archivo.
-                 should_close = True 
-            
-            if should_close:
                 try:
                     sel.unregister(sock)
                 except:
@@ -397,13 +379,13 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
                 auth_state.pop(sock, None)
                 return
 
-            # Para requests normales (que usan keep-alive) limpiamos el buffer
+            ### Limpiamos el buffer para ser reutilizado (debido a las conexiones persistentes) ###
             try:
                 data.inb = b""
             except Exception:
                 pass
-
     except Exception as e:
+        ### Intentamos cerrar la conexion en caso de error ###
         print(f"Error en service_connection: {e}")
         try:
             sel.unregister(sock)
@@ -424,6 +406,7 @@ def manejar_descarga(archivo, request_line, zip, headers):
     """
     # COMPLETAR
     try:
+        ### Si se desea recibir el archivo comprimido, chqueamos que acepte gzip ###
         if zip:
             enc_header = None
             for line in headers.split("\r\n"):
@@ -434,34 +417,34 @@ def manejar_descarga(archivo, request_line, zip, headers):
             if not acepta_gzip:
                 return generate_response(406)
 
+        ### Adivinamos el tipo de archivo ###
         mime_type, _ = mimetypes.guess_type(archivo)
         if mime_type is None:
             mime_type = "application/octet-stream"
 
+        ### Abrimos el archivo ###
         with open(archivo, "rb") as f:
             original = f.read()
 
         if zip:
+            ### Si se quiere el archivo comprimido => lo comprimimos ###
             buffer = io.BytesIO()
             with gzip.GzipFile(fileobj=buffer, mode="wb") as gz:
                 gz.write(original)
             comprimido = buffer.getvalue()
             
-            stats[0] = archivo
-            stats[1] = len(original)
-            stats[2] = len(comprimido)
-            stats[3] = True
-            
+            # stats[0], stats[1], stats[2], stats[3] = archivo, len(original), len(comprimido), True
+
+            # Devolvemos el archivo comprimido
             return generate_response(200, None, True, mime_type, comprimido, archivo, zip=True)
         else:
             
-            stats[0] = archivo
-            stats[1] = len(original)
-            stats[2] = 0
-            stats[3] = False
+            # stats[0], stats[1], stats[2], stats[3] = archivo, len(original), 0, False
             
+            # Devolvemos el archivo original
             return generate_response(200, None, True, mime_type, original, archivo, zip=False)
-            
+    
+    ### Handling de errores ###
     except FileNotFoundError:
         return generate_response(404, None, True)
     except Exception as e:
@@ -473,6 +456,8 @@ def manejar_carga(body, boundary, directorio_destino="."):
     Procesa un POST con multipart/form-data, guarda el archivo y devuelve una página de confirmación.
     """
     # COMPLETAR
+
+    ### Si no existe el directorio para los archivos, lo creamos ###
     if not os.path.exists(directorio_destino):
         os.makedirs(directorio_destino)
     if boundary:
@@ -480,12 +465,13 @@ def manejar_carga(body, boundary, directorio_destino="."):
     else:
         return generar_html_aux("Error", b"Boundary no encontrado.")
         
+    ### Escribimos el archivo en el directorio ###
     if filename and file_content:
         ruta = os.path.join(directorio_destino, os.path.basename(filename)) 
         try:
             with open(ruta, "wb") as f:
                 f.write(file_content)
-            print(f"Archivo recibido: {filename} ({len(file_content)} bytes) guardado en {ruta}")
+            print(f"Archivo recibido: {filename} ({len(file_content)} bytes) guardado en {ruta}") #LO DEJO?
             html_content = generar_html_aux(filename, file_content)
             return html_content
         except Exception as e:
@@ -496,20 +482,16 @@ def manejar_carga(body, boundary, directorio_destino="."):
         error_html = "<html><body><h1>Error: No se encontró el archivo o contenido en la solicitud. Asegúrate de haber seleccionado un archivo.</h1><p><a href='/'>Volver</a></p></body></html>"
         return error_html
 
-sel = selectors.DefaultSelector()
-
 def accept_wrapper(sock):
+    ### Aceptamos las conexiones ###
     conn, addr = sock.accept()
     print(f"Accepted connection from {addr}")
     conn.setblocking(False)
-
     data = types.SimpleNamespace(addr=addr, inb=b"", outb=b"")
-
     timeout_map[conn] = timer()
     auth_state[conn] = False 
-
-    events = selectors.EVENT_READ | selectors.EVENT_WRITE
-    sel.register(conn, events, data=data)
+    events = selectors.EVENT_READ | selectors.EVENT_WRITE  # Nos interesan tanto los eventos de lectura como de escritura
+    sel.register(conn, events, data=data)                  # Registro el socket en selectors
 
 def start_server(archivo_descarga=None, modo_upload=False, zip=False):
     """
@@ -534,7 +516,7 @@ def start_server(archivo_descarga=None, modo_upload=False, zip=False):
 
     modo_str = "Upload" if modo_upload else "Download"
     archivo_str = f" ({archivo_descarga})" if archivo_descarga else ""
-    print(f"Servidor en modo: {modo_str}{archivo_str}")
+    print(f"Servidor en modo: {modo_str}{archivo_str}") #LO BORRO?
     
     url = "http://" + ip_server + ":" + str(puerto)
     print(f"URL de acceso: {url}")
@@ -551,20 +533,25 @@ def start_server(archivo_descarga=None, modo_upload=False, zip=False):
     # - enviar la respuesta al cliente
     # - cerrar la conexión
 
+    """
+    Loop infinito que permite aceptar conexiones y manejar las existentes.
+    Siempre pendiende a si llega alguna request.
+    """
     while True:
         try:
-            events = sel.select(timeout=None)
+            events = sel.select(timeout=None) # Devuelve una lista de (key, mask), uno por cada socket con evento pendiente
             for key, mask in events:
+                # Si key.data es None => este socket es el socket acepta nuevas conexiones entrantes
                 if key.data is None:
+                    # Aceptamos la nueva conexión, creamos un socket para el cliente y lo registramos en el selector
                     accept_wrapper(key.fileobj)
                 else:
-                    service_connection(key, mask, modo_upload, archivo_descarga, zip)
+                    # Si key.data != None => evento correspondiente a un cliente ya conectado
+                    service_connection(key, mask, modo_upload, archivo_descarga, zip) # Procesamos su request
         except Exception as e:
             print(f"Error principal del servidor: {e}")
             break
-
     #pass  # Eliminar cuando esté implementado
-
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
