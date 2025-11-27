@@ -19,6 +19,7 @@ PASSWORD_SECRETA = "wop"
 
 def imprimir_qr_en_terminal(url):
     """Dada una URL la imprime por terminal como un QR"""
+    #COMPLETAR usando la librería qrcode
     qr = qrcode.QRCode(
     version=1,
     box_size=2,
@@ -42,13 +43,16 @@ def get_wifi_ip():
 def parsear_multipart(body, boundary):
     """Función auxiliar (ya implementada) para parsear multipart/form-data."""
     try:
+        # Se divide el cuerpo por el boundary para luego poder extraer el nombre y contenido del archivo
         parts = body.split(f'--{boundary}'.encode())
         for part in parts:
             if b'filename=' in part:
+                # Se extrae el nombre del archivo
                 filename_start = part.find(b'filename="') + len(b'filename="')
                 filename_end = part.find(b'"', filename_start)
                 filename = part[filename_start:filename_end].decode()
 
+                # Se extrae el contenido del archivo que arranca después de los headers
                 header_end = part.find(b'\r\n\r\n')
                 if header_end == -1:
                     header_end = part.find(b'\n\n')
@@ -56,12 +60,12 @@ def parsear_multipart(body, boundary):
                 else:
                     content_start = header_end + 4
 
+                # El contenido va hasta el último CRLF antes del boundary
                 content_end = part.rfind(b'\r\n')
                 if content_end <= content_start:
                     content_end = part.rfind(b'\n')
 
                 file_content = part[content_start:content_end]
-
                 if filename and file_content:
                     return filename, file_content
         return None, None
@@ -69,41 +73,13 @@ def parsear_multipart(body, boundary):
         print(f"Error al parsear multipart: {e}")
         return None, None
 
-def generar_html_login(error_msg=None):
-    """Genera el HTML del formulario de inicio de sesión con mensaje de error opcional."""
-    error_display = f'<p class="error">{error_msg}</p>' if error_msg else ''
-    return f"""
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>Acceso Restringido</title>
-    <style>
-      body {{ font-family: sans-serif; max-width: 500px; margin: 50px auto; text-align: center; }}
-      form {{ border: 1px solid #ccc; padding: 30px; border-radius: 5px; background: #f9f9f9; }}
-      input[type="password"], input[type="submit"] {{ padding: 10px; margin: 5px 0; width: 80%; box-sizing: border-box; border-radius: 3px; border: 1px solid #ddd; }}
-      input[type="submit"] {{ background: #007bff; color: white; border: none; cursor: pointer; }}
-      .error {{ color: red; font-weight: bold; }}
-    </style>
-  </head>
-  <body>
-    <h1>🔒 Acceso Requerido</h1>
-    {error_display}
-    <form method="POST" action="/">
-      <label for="password">Contraseña:</label><br>
-      <input type="password" id="password" name="password" required><br><br>
-      <input type="submit" value="Ingresar">
-    </form>
-  </body>
-</html>
-"""
-
 def generar_html_interfaz(modo):
     """
-    Genera el HTML de la interfaz principal.
-    CORRECCIÓN: Se revierte a un HTML de descarga más simple.
+    Genera el HTML de la interfaz principal:
+    - Si modo == 'download': incluye un enlace o botón para descargar el archivo.
+    - Si modo == 'upload': incluye un formulario para subir un archivo.
     """
     if modo == 'download':
-        # HTML original/simple para descarga. Contiene el link necesario.
         return """
 <html>
   <head>
@@ -132,14 +108,43 @@ def generar_html_interfaz(modo):
       body { font-family: sans-serif; max-width: 500px; margin: 50px auto; }
       form { border: 2px dashed #ccc; padding: 20px; border-radius: 5px; }
       input[type="submit"] { padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; }
-      h1 { text-align: center; }
     </style>
   </head>
   <body>
-    <h1>📤 Subir archivo</h1>
+    <h1>Subir archivo</h1>
     <form method="POST" enctype="multipart/form-data">
       <input type="file" name="file" required>
       <input type="submit" value="Subir">
+    </form>
+  </body>
+</html>
+"""
+
+#CODIGO A COMPLETAR
+
+def generar_html_login(error_msg=None):
+    """Genera el HTML del formulario de inicio de sesión con mensaje de error opcional."""
+    error_display = f'<p class="error">{error_msg}</p>' if error_msg else ''
+    return f"""
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Acceso Restringido</title>
+    <style>
+      body {{ font-family: sans-serif; max-width: 500px; margin: 50px auto; text-align: center; }}
+      form {{ border: 1px solid #ccc; padding: 30px; border-radius: 5px; background: #f9f9f9; }}
+      input[type="password"], input[type="submit"] {{ padding: 10px; margin: 5px 0; width: 80%; box-sizing: border-box; border-radius: 3px; border: 1px solid #ddd; }}
+      input[type="submit"] {{ background: #007bff; color: white; border: none; cursor: pointer; }}
+      .error {{ color: red; font-weight: bold; }}
+    </style>
+  </head>
+  <body>
+    <h1>🔒 Acceso Requerido</h1>
+    {error_display}
+    <form method="POST" action="/">
+      <label for="password">Contraseña:</label><br>
+      <input type="password" id="password" name="password" required><br><br>
+      <input type="submit" value="Ingresar">
     </form>
   </body>
 </html>
@@ -367,13 +372,13 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
             sock.sendall(response)
             if len(stats[0]) > 1:
                 end = timer()
-                file_stats.agregar_archivo(
-                            nombre=stats[0],
-                            original=stats[1],
-                            comprimido=stats[2],
-                            esta_comprimido=stats[3],
-                            tiempo=end-start
-                        )
+                # file_stats.agregar_archivo(
+                #             nombre=stats[0],
+                #             original=stats[1],
+                #             comprimido=stats[2],
+                #             esta_comprimido=stats[3],
+                #             tiempo=end-start
+                #         )
 
             # *** CIERRE CONDICIONAL DE CONEXIÓN ***
             # Si se acaba de servir un archivo (GET /download exitoso), cerrar la conexión.
@@ -411,11 +416,13 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
         except Exception:
             pass
 
-
 def manejar_descarga(archivo, request_line, zip, headers):
     """
     Genera una respuesta HTTP con el archivo solicitado. 
+    Si el archivo no existe debe devolver un error.
+    Debe incluir los headers: Content-Type, Content-Length y Content-Disposition.
     """
+    # COMPLETAR
     try:
         if zip:
             enc_header = None
@@ -465,6 +472,7 @@ def manejar_carga(body, boundary, directorio_destino="."):
     """
     Procesa un POST con multipart/form-data, guarda el archivo y devuelve una página de confirmación.
     """
+    # COMPLETAR
     if not os.path.exists(directorio_destino):
         os.makedirs(directorio_destino)
     if boundary:
@@ -488,7 +496,6 @@ def manejar_carga(body, boundary, directorio_destino="."):
         error_html = "<html><body><h1>Error: No se encontró el archivo o contenido en la solicitud. Asegúrate de haber seleccionado un archivo.</h1><p><a href='/'>Volver</a></p></body></html>"
         return error_html
 
-
 sel = selectors.DefaultSelector()
 
 def accept_wrapper(sock):
@@ -504,7 +511,6 @@ def accept_wrapper(sock):
     events = selectors.EVENT_READ | selectors.EVENT_WRITE
     sel.register(conn, events, data=data)
 
-
 def start_server(archivo_descarga=None, modo_upload=False, zip=False):
     """
     Inicia el servidor TCP.
@@ -513,6 +519,7 @@ def start_server(archivo_descarga=None, modo_upload=False, zip=False):
     """
 
     # 1. Obtener IP local y poner al servidor a escuchar en un puerto aleatorio
+    # COMPLETAR
 
     ip_server = get_wifi_ip()
     server_socket = socket(AF_INET, SOCK_STREAM)
@@ -555,6 +562,8 @@ def start_server(archivo_descarga=None, modo_upload=False, zip=False):
         except Exception as e:
             print(f"Error principal del servidor: {e}")
             break
+
+    #pass  # Eliminar cuando esté implementado
 
 
 if __name__ == "__main__":

@@ -1,4 +1,0 @@
-1. timeout
-2. cierro de sesion en descarga
-3. experimentacion
-4. conclusion
