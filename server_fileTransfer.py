@@ -6,7 +6,7 @@ import qrcode
 import mimetypes
 import gzip
 import io
-import file_stats
+#import file_stats
 from timeit import default_timer as timer
 import selectors
 import types
@@ -16,8 +16,7 @@ import types
 # stats = ["", 0, 0, True, 0.0]            # Lista utilizada en la experimentacion
 timeout_map = {}                           # Diccionario socket: timer
 auth_state = {}                            # Diccionario conexion: autenticado
-# PASSWORD_SECRETA = "hashtagweloveemi<3"  # Contraseña hardcodeada para el bonus de autenticacion
-PASSWORD_SECRETA = "wop"
+PASSWORD_SECRETA = "hashtagweloveemi<3"    # Contrasenia hardcodeada para el bonus de autenticacion
 sel = selectors.DefaultSelector()
 #####################
 
@@ -25,7 +24,6 @@ sel = selectors.DefaultSelector()
 
 def imprimir_qr_en_terminal(url):
     """Dada una URL la imprime por terminal como un QR"""
-    #COMPLETAR usando la librería qrcode
     qr = qrcode.QRCode(
     version=1,
     box_size=2,
@@ -170,7 +168,7 @@ def generar_html_aux(filename, file_content):
                     </style>
                 </head>
                 <body>
-                    <h1>✅ Archivo Subido con Éxito</h1>
+                    <h1>🕺🏽 Archivo Subido con Éxito 🕺🏽</h1>
                     <p>Nombre: <strong>{filename}</strong></p>
                     <p>Tamaño: <strong>{len(file_content)} bytes</strong></p>
                     <p><a href="/">Volver a la interfaz principal</a></p>
@@ -242,7 +240,7 @@ def generate_response(status, html=None, from_descarga=False, mime_type=None, ar
                     ).encode() + html_bytes
 
 def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
-    """Funcion auxiliar para manejar los diferentes aspectos de la conexion."""
+    """Funcion auxiliar para manejar la conexion."""
 
     sock = key.fileobj
     data = key.data
@@ -260,7 +258,7 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
         return
 
     try:
-        if mask & selectors.EVENT_READ:         # Si selectors indica que hay algo para leer desde el socket
+        if mask & selectors.EVENT_READ:         # Si selectors indica que hay algo para leer desde el socket...
             recv_data = sock.recv(4096)         # Recibo los datos
             timeout_map[sock] = timer()
 
@@ -338,7 +336,7 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
                         html = generar_html_login(error_msg="Contraseña incorrecta")
                         response = generate_response(200, html)
                 
-                # POST del formulario de subida de archivos
+                ### POST del formulario de subida de archivos ###
                 elif "multipart/form-data" in content_type and modo and auth_state.get(sock):
                     boundary = None
                     for line in headers.split("\r\n"):
@@ -358,7 +356,7 @@ def service_connection(key, mask, modo, archivo_descarga=None, zip=False):
                     html = generar_html_login(error_msg="Sesión expirada o acceso no autorizado. Inicie sesión.")
                     response = generate_response(200, html)
 
-            ### Request sin solucion ###
+            ### Request sin respuesta ###
             if response is None:
                 response = generate_response(404)
             
@@ -404,7 +402,6 @@ def manejar_descarga(archivo, request_line, zip, headers):
     Si el archivo no existe debe devolver un error.
     Debe incluir los headers: Content-Type, Content-Length y Content-Disposition.
     """
-    # COMPLETAR
     try:
         ### Si se desea recibir el archivo comprimido, chqueamos que acepte gzip ###
         if zip:
@@ -455,7 +452,6 @@ def manejar_carga(body, boundary, directorio_destino="."):
     """
     Procesa un POST con multipart/form-data, guarda el archivo y devuelve una página de confirmación.
     """
-    # COMPLETAR
 
     ### Si no existe el directorio para los archivos, lo creamos ###
     if not os.path.exists(directorio_destino):
@@ -471,7 +467,7 @@ def manejar_carga(body, boundary, directorio_destino="."):
         try:
             with open(ruta, "wb") as f:
                 f.write(file_content)
-            print(f"Archivo recibido: {filename} ({len(file_content)} bytes) guardado en {ruta}") #LO DEJO?
+            print(f"Archivo recibido: {filename} ({len(file_content)} bytes) guardado en {ruta}")
             html_content = generar_html_aux(filename, file_content)
             return html_content
         except Exception as e:
@@ -501,30 +497,26 @@ def start_server(archivo_descarga=None, modo_upload=False, zip=False):
     """
 
     # 1. Obtener IP local y poner al servidor a escuchar en un puerto aleatorio
-    # COMPLETAR
 
     ip_server = get_wifi_ip()
     server_socket = socket(AF_INET, SOCK_STREAM)
     server_socket.bind((ip_server, 0))
     puerto = server_socket.getsockname()[1]
     server_socket.listen()
-    server_socket.setblocking(False)
-    sel.register(server_socket, selectors.EVENT_READ, data=None)
+    server_socket.setblocking(False)   # Configuramos el socket como no bloqueante
+    sel.register(server_socket, selectors.EVENT_READ, data=None)   # Registramos el socket en selectors
 
-    # 2. Mostrar información del servidor y el código QR
-    # COMPLETAR: imprimir URL y modo de operación (download/upload)
+    # 2. Mostrar información del servidor y el código QR (imprimir URL y modo de operación (download/upload))
 
     modo_str = "Upload" if modo_upload else "Download"
     archivo_str = f" ({archivo_descarga})" if archivo_descarga else ""
-    print(f"Servidor en modo: {modo_str}{archivo_str}") #LO BORRO?
+    print(f"Servidor en modo: {modo_str}{archivo_str}")
     
     url = "http://" + ip_server + ":" + str(puerto)
     print(f"URL de acceso: {url}")
     imprimir_qr_en_terminal(url)
 
     # 3. Esperar conexiones y atender un cliente
-    
-    # COMPLETAR:
     # - aceptar la conexión (accept)
     # - recibir los datos (recv)
     # - decodificar la solicitud HTTP
@@ -541,17 +533,15 @@ def start_server(archivo_descarga=None, modo_upload=False, zip=False):
         try:
             events = sel.select(timeout=None) # Devuelve una lista de (key, mask), uno por cada socket con evento pendiente
             for key, mask in events:
-                # Si key.data es None => este socket es el socket acepta nuevas conexiones entrantes
+                # Si key.data es None => este socket es el que acepta nuevas conexiones entrantes
                 if key.data is None:
-                    # Aceptamos la nueva conexión, creamos un socket para el cliente y lo registramos en el selector
-                    accept_wrapper(key.fileobj)
+                    accept_wrapper(key.fileobj) # Aceptamos la nueva conexión
                 else:
                     # Si key.data != None => evento correspondiente a un cliente ya conectado
                     service_connection(key, mask, modo_upload, archivo_descarga, zip) # Procesamos su request
         except Exception as e:
-            print(f"Error principal del servidor: {e}")
+            print(f"Error del servidor: {e}")
             break
-    #pass  # Eliminar cuando esté implementado
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
